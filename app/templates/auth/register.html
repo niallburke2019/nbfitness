@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>Create account</h1>
+
+  <form class="form" method="post" action="{{ url_for('auth.register_post') }}">
+    <label>Name (optional)</label>
+    <input type="text" name="name" placeholder="Niall Burke" />
+
+    <label>Email</label>
+    <input type="email" name="email" placeholder="you@example.com" required />
+
+    <label>Password</label>
+    <input type="password" name="password" placeholder="Min 8 characters" required />
+
+    <button class="btn" type="submit">Register</button>
+  </form>
+{% endblock %}

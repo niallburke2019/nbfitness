@@ -1,0 +1,21 @@
+body { font-family: Arial, sans-serif; margin: 0; background: #f6f7fb; color: #111; }
+.container { max-width: 980px; margin: 0 auto; padding: 16px; }
+.row { display: flex; align-items: center; justify-content: space-between; }
+.topbar { background: #ffffff; border-bottom: 1px solid #e7e7e7; }
+.brand { font-weight: 700; }
+.nav a { margin-left: 12px; text-decoration: none; color: #222; }
+.nav a:hover { text-decoration: underline; }
+
+.form { background: #fff; padding: 16px; border: 1px solid #e7e7e7; border-radius: 10px; max-width: 420px; }
+.form label { display: block; margin-top: 12px; font-size: 14px; }
+.form input { width: 100%; padding: 10px; margin-top: 6px; border: 1px solid #ccc; border-radius: 8px; }
+
+.btn { display: inline-block; margin-top: 14px; padding: 10px 14px; border-radius: 10px; border: none; background: #1f4cff; color: #fff; cursor: pointer; text-decoration: none; }
+.btn.secondary { background: #2a2a2a; }
+
+.card { background: #fff; padding: 16px; border: 1px solid #e7e7e7; border-radius: 10px; margin-top: 16px; }
+
+.messages { margin: 14px 0; }
+.msg { padding: 10px; border-radius: 10px; margin-bottom: 8px; }
+.msg.success { background: #e6fff0; border: 1px solid #a8f0c2; }
+.msg.error { background: #ffecec; border: 1px solid #ffb3b3; }

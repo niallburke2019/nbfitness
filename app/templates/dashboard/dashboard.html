@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>Dashboard</h1>
+  <p>Hi {% if user.name %}{{ user.name }}{% else %}there{% endif %}.</p>
+
+  <div class="card">
+    <h2>Sprint 2 next</h2>
+    <ul>
+      <li>Workout logging</li>
+      <li>Meal logging</li>
+      <li>Validation + testing tables</li>
+    </ul>
+  </div>
+{% endblock %}

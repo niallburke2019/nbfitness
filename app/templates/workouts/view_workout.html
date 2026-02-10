@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container py-4">
+
+  <div class="d-flex justify-content-between align-items-start mb-3">
+    <div>
+      <h1 class="display-5 mb-1">{{ workout.title }}</h1>
+
+      <div class="text-muted">
+        {{ workout.workout_date.strftime("%Y-%m-%d") }} · {{ workout.workout_date.strftime("%A") }}
+      </div>
+
+      {% if workout.notes %}
+        <div class="mt-2">
+          <span class="fw-semibold">Notes:</span>
+          <span>{{ workout.notes }}</span>
+        </div>
+      {% endif %}
+    </div>
+
+    <div>
+      <a class="btn btn-outline-primary" href="{{ url_for('workouts.list_workouts') }}">Back</a>
+    </div>
+  </div>
+
+  <hr>
+
+  <h3 class="mb-3">Add exercise</h3>
+  <form method="POST" action="{{ url_for('workouts.add_exercise', workout_id=workout.id) }}" class="row g-2 mb-4">
+    <div class="col-md-3">
+      <input class="form-control" name="name" placeholder="Exercise name (e.g. Bench Press)" required>
+    </div>
+    <div class="col-md-3">
+      <input class="form-control" name="muscle_group" placeholder="Muscle group (optional)">
+    </div>
+    <div class="col-md-4">
+      <input class="form-control" name="notes" placeholder="Notes (optional)">
+    </div>
+    <div class="col-md-2 d-grid">
+      <button class="btn btn-primary" type="submit">Add</button>
+    </div>
+  </form>
+
+  {% if workout.exercises %}
+    {% for ex in workout.exercises %}
+      <div class="card mb-3">
+        <div class="card-body">
+
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <h4 class="mb-1">{{ ex.name }}</h4>
+
+              {% if ex.muscle_group %}
+                <div class="text-muted">{{ ex.muscle_group }}</div>
+              {% endif %}
+
+              {% if ex.notes %}
+                <div class="mt-2">
+                  <span class="fw-semibold">Notes:</span>
+                  <span>{{ ex.notes }}</span>
+                </div>
+              {% endif %}
+            </div>
+
+            <!-- ✅ Delete Exercise Button -->
+            <div>
+              <form method="POST"
+                    action="{{ url_for('workouts.delete_exercise', exercise_id=ex.id) }}"
+                    onsubmit="return confirm('Delete this exercise and all its sets?');">
+                <button class="btn btn-sm btn-outline-danger" type="submit">Delete exercise</button>
+              </form>
+            </div>
+          </div>
+
+          <h6 class="mt-4 mb-2">Sets</h6>
+
+          {% if ex.sets %}
+            <div class="table-responsive">
+              <table class="table table-sm align-middle mb-3">
+                <thead>
+                  <tr>
+                    <th style="width: 70px;">Set</th>
+                    <th style="width: 90px;">Reps</th>
+                    <th style="width: 140px;">Weight (kg)</th>
+                    <th style="width: 90px;">RIR</th>
+                    <th style="width: 110px;">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for s in ex.sets %}
+                    <tr>
+                      <td>{{ s.set_number }}</td>
+                      <td>{{ s.reps }}</td>
+                      <td>{{ "%.1f"|format(s.weight_kg) if s.weight_kg is not none else "-" }}</td>
+                      <td>{{ s.rir if s.rir is not none else "-" }}</td>
+                      <td>
+                        <form method="POST"
+                              action="{{ url_for('workouts.delete_set', set_id=s.id) }}"
+                              onsubmit="return confirm('Delete this set?');">
+                          <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+                        </form>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <p class="text-muted mb-2">No sets yet.</p>
+          {% endif %}
+
+          <form method="POST" action="{{ url_for('workouts.add_set', exercise_id=ex.id) }}" class="row g-2">
+            <div class="col-md-2">
+              <input class="form-control" type="number" name="reps" placeholder="Reps" min="1" required>
+            </div>
+            <div class="col-md-3">
+              <input class="form-control" type="number" step="0.1" name="weight_kg" placeholder="Weight kg (optional)" min="0">
+            </div>
+            <div class="col-md-2">
+              <input class="form-control" type="number" name="rir" placeholder="RIR (0-10)" min="0" max="10">
+            </div>
+            <div class="col-md-3 d-grid">
+              <button class="btn btn-success" type="submit">Add set</button>
+            </div>
+          </form>
+
+        </div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <p class="text-muted">No exercises yet. Add your first exercise above.</p>
+  {% endif %}
+
+</div>
+{% endblock %}
