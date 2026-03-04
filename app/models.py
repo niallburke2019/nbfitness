@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from app import db
 
 
-def utcnow():
-    """Timezone-aware UTC timestamp (Python 3.13+ safe)."""
-    return datetime.now(timezone.utc)
+def utcnow() -> datetime:
+    """UTC timestamp (naive). Best compatibility with SQL Server datetime2."""
+    return datetime.utcnow()
 
 
 class User(db.Model):
@@ -18,7 +18,8 @@ class User(db.Model):
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
 
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    # Use datetime2 in SQL Server (naive UTC in Python)
+    created_at = db.Column(db.DateTime(), nullable=False, default=utcnow)
 
     workouts = db.relationship(
         "Workout",
@@ -34,7 +35,7 @@ class User(db.Model):
         lazy="dynamic",
     )
 
-    # ✅ NEW: one-to-one macro goal
+    # one-to-one macro goal
     macro_goal = db.relationship(
         "MacroGoal",
         back_populates="user",
@@ -42,7 +43,7 @@ class User(db.Model):
         cascade="all, delete-orphan",
     )
 
-    # ✅ NEW: bodyweight logs
+    # bodyweight logs
     weight_entries = db.relationship(
         "WeightEntry",
         back_populates="user",
@@ -50,7 +51,7 @@ class User(db.Model):
         lazy="dynamic",
     )
 
-    # flask-login
+    # flask-login compatibility
     @property
     def is_authenticated(self):
         return True
@@ -86,9 +87,9 @@ class Workout(db.Model):
 
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
 
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    created_at = db.Column(db.DateTime(), nullable=False, default=utcnow)
     updated_at = db.Column(
-        db.DateTime(timezone=True),
+        db.DateTime(),
         nullable=False,
         default=utcnow,
         onupdate=utcnow,
@@ -193,12 +194,11 @@ class MealEntry(db.Model):
     carbs_g = db.Column(db.Float, nullable=False, default=0.0)
     fat_g = db.Column(db.Float, nullable=False, default=0.0)
 
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    created_at = db.Column(db.DateTime(), nullable=False, default=utcnow)
 
     user = db.relationship("User", back_populates="meal_entries")
 
 
-# ✅ NEW: Macro goals per user (one row per user)
 class MacroGoal(db.Model):
     __tablename__ = "macro_goals"
 
@@ -218,7 +218,7 @@ class MacroGoal(db.Model):
     fat_target_g = db.Column(db.Float, nullable=False, default=0.0)
 
     updated_at = db.Column(
-        db.DateTime(timezone=True),
+        db.DateTime(),
         nullable=False,
         default=utcnow,
         onupdate=utcnow,
@@ -227,7 +227,6 @@ class MacroGoal(db.Model):
     user = db.relationship("User", back_populates="macro_goal")
 
 
-# ✅ NEW: Bodyweight tracking
 class WeightEntry(db.Model):
     __tablename__ = "weight_entries"
 
@@ -239,7 +238,7 @@ class WeightEntry(db.Model):
 
     weight_kg = db.Column(db.Float, nullable=False)
 
-    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    created_at = db.Column(db.DateTime(), nullable=False, default=utcnow)
 
     user = db.relationship("User", back_populates="weight_entries")
 
