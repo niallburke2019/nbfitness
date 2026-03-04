@@ -9,7 +9,12 @@ from flask_migrate import Migrate
 from flask_login import LoginManager
 from dotenv import load_dotenv
 
-from flasgger import Swagger
+# ✅ Make Swagger optional so Azure won't crash if flasgger isn't installed
+try:
+    from flasgger import Swagger
+except ImportError:
+    Swagger = None  # type: ignore
+
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -56,6 +61,18 @@ limiter = Limiter(
     ],
     storage_uri=os.getenv("RATELIMIT_STORAGE_URI", "memory://"),
 )
+
+
+def _env_flag(name: str, default: bool = True) -> bool:
+    """
+    Read boolean flags from env vars (true/false/1/0/yes/no).
+    """
+    raw = (os.getenv(name) or "").strip().lower()
+    if raw in {"1", "true", "yes", "y", "on"}:
+        return True
+    if raw in {"0", "false", "no", "n", "off"}:
+        return False
+    return default
 
 
 def create_app() -> Flask:
@@ -128,35 +145,39 @@ def create_app() -> Flask:
     login_manager.login_message_category = "warning"
 
     # -----------------------
-    # Swagger / OpenAPI Docs
+    # Swagger / OpenAPI Docs (optional)
     # -----------------------
-    swagger_config = {
-        "headers": [],
-        "specs": [
-            {
-                "endpoint": "apispec_1",
-                "route": "/apidocs/apispec_1.json",
-                "rule_filter": lambda rule: True,  # include all
-                "model_filter": lambda tag: True,
-            }
-        ],
-        "static_url_path": "/flasgger_static",
-        "swagger_ui": True,
-        "specs_route": "/apidocs/",
-    }
+    # Disable with SWAGGER_ENABLED=false (useful for prod if you want)
+    swagger_enabled = _env_flag("SWAGGER_ENABLED", default=not is_production)
 
-    swagger_template = {
-        "swagger": "2.0",
-        "info": {
-            "title": "NB Fitness API",
-            "description": "REST API for Meals (CRUD) with API key authentication and rate limiting.",
-            "version": "1.0.0",
-        },
-        "basePath": "/",
-        "schemes": ["https", "http"],
-    }
+    if swagger_enabled and Swagger is not None:
+        swagger_config = {
+            "headers": [],
+            "specs": [
+                {
+                    "endpoint": "apispec_1",
+                    "route": "/apidocs/apispec_1.json",
+                    "rule_filter": lambda rule: True,  # include all
+                    "model_filter": lambda tag: True,
+                }
+            ],
+            "static_url_path": "/flasgger_static",
+            "swagger_ui": True,
+            "specs_route": "/apidocs/",
+        }
 
-    Swagger(app, config=swagger_config, template=swagger_template)
+        swagger_template = {
+            "swagger": "2.0",
+            "info": {
+                "title": "NB Fitness API",
+                "description": "REST API for Meals (CRUD) with API key authentication and rate limiting.",
+                "version": "1.0.0",
+            },
+            "basePath": "/",
+            "schemes": ["https", "http"],
+        }
+
+        Swagger(app, config=swagger_config, template=swagger_template)
 
     # -----------------------
     # User Loader
