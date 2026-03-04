@@ -1,21 +1,470 @@
-body { font-family: Arial, sans-serif; margin: 0; background: #f6f7fb; color: #111; }
-.container { max-width: 980px; margin: 0 auto; padding: 16px; }
-.row { display: flex; align-items: center; justify-content: space-between; }
-.topbar { background: #ffffff; border-bottom: 1px solid #e7e7e7; }
-.brand { font-weight: 700; }
-.nav a { margin-left: 12px; text-decoration: none; color: #222; }
-.nav a:hover { text-decoration: underline; }
+/* static/css/main.css */
 
-.form { background: #fff; padding: 16px; border: 1px solid #e7e7e7; border-radius: 10px; max-width: 420px; }
-.form label { display: block; margin-top: 12px; font-size: 14px; }
-.form input { width: 100%; padding: 10px; margin-top: 6px; border: 1px solid #ccc; border-radius: 8px; }
+/* =========================
+   THEME TOKENS
+========================= */
+:root {
+  --primary: #4cc9f0;     /* accent */
+  --secondary: #a7b3c2;   /* muted text */
+  --bg: #0b1220;
+  --panel: #0f1a2e;
+  --panel2: #111f36;
+  --border: rgba(255, 255, 255, 0.08);
+  --text: #e6edf3;
+  --text2: #a7b3c2;
+}
 
-.btn { display: inline-block; margin-top: 14px; padding: 10px 14px; border-radius: 10px; border: none; background: #1f4cff; color: #fff; cursor: pointer; text-decoration: none; }
-.btn.secondary { background: #2a2a2a; }
+/* =========================
+   GLOBAL BACKGROUND / TEXT
+========================= */
 
-.card { background: #fff; padding: 16px; border: 1px solid #e7e7e7; border-radius: 10px; margin-top: 16px; }
+.nb-body {
+  background: radial-gradient(1200px 600px at 10% 0%, rgba(76, 201, 240, 0.10), transparent 50%),
+              radial-gradient(900px 500px at 90% 10%, rgba(76, 201, 240, 0.06), transparent 55%),
+              var(--bg);
+  color: var(--text);
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+}
 
-.messages { margin: 14px 0; }
-.msg { padding: 10px; border-radius: 10px; margin-bottom: 8px; }
-.msg.success { background: #e6fff0; border: 1px solid #a8f0c2; }
-.msg.error { background: #ffecec; border: 1px solid #ffb3b3; }
+/* Keep canvases responsive (charts) */
+canvas {
+  max-width: 100%;
+}
+
+/* Force readable headings everywhere */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--text) !important;
+  letter-spacing: -0.2px;
+}
+
+label,
+.form-label,
+.col-form-label {
+  color: var(--text) !important;
+}
+
+small,
+.form-text,
+.text-muted {
+  color: var(--text2) !important;
+}
+
+/* =========================
+   PAGE TITLE SPACING FIX
+   (Prevents dropdown overlap)
+========================= */
+
+h1.display-4,
+h1.display-5,
+h1.display-6 {
+  padding-top: 0.35rem;
+  margin-top: 0.25rem;
+}
+
+/* Main layout container */
+.nb-main {
+  max-width: 1100px;
+  padding-top: 0.25rem;
+}
+
+/* =========================
+   NAVBAR
+========================= */
+
+.nb-nav {
+  background: rgba(11, 18, 32, 0.75) !important;
+  backdrop-filter: blur(10px);
+  position: relative;
+  z-index: 1050;
+}
+
+/* Prevent dropdown clipping */
+.navbar,
+.navbar .container,
+.navbar .collapse {
+  overflow: visible !important;
+}
+
+.navbar .nav-link {
+  color: var(--text2) !important;
+  font-weight: 500;
+}
+
+.navbar .nav-link:hover,
+.navbar .nav-link:focus {
+  color: var(--text) !important;
+}
+
+.navbar .nav-link.active {
+  color: var(--text) !important;
+}
+
+.nb-user {
+  color: rgba(230, 237, 243, 0.7);
+}
+
+/* =========================
+   LOGO
+========================= */
+
+.nb-logo-badge {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(76,201,240,0.25), rgba(76,201,240,0.08));
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.nb-logo-text {
+  color: var(--text);
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+/* =========================
+   DROPDOWN
+========================= */
+
+.nb-dropdown {
+  background: rgba(15, 26, 46, 0.98) !important;
+  border: 1px solid var(--border) !important;
+  z-index: 1060;
+  min-width: 220px;
+  padding: 0.35rem;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+}
+
+/* Add slight spacing so it doesn't sit directly over page headings */
+.nav-item.dropdown .dropdown-menu {
+  margin-top: 0.6rem !important;
+}
+
+.nb-dropdown .dropdown-item {
+  color: var(--text2) !important;
+  border-radius: 8px;
+  padding: 0.55rem 0.75rem;
+}
+
+.nb-dropdown .dropdown-item:hover,
+.nb-dropdown .dropdown-item:focus {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: var(--text) !important;
+}
+
+.dropdown-divider {
+  border-top: 1px solid var(--border) !important;
+  opacity: 1;
+}
+
+/* =========================
+   CARDS / TABLES / MODALS
+========================= */
+
+.card,
+.table,
+.modal-content {
+  background: rgba(15, 26, 46, 0.75) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text) !important;
+}
+
+.card-header,
+.card-title {
+  color: var(--text) !important;
+}
+
+/* Bootstrap table variables (force dark theme text) */
+.table {
+  --bs-table-color: var(--text) !important;
+  --bs-table-bg: transparent !important;
+  --bs-table-border-color: var(--border) !important;
+}
+
+/* The real Bootstrap selector that often forces black text */
+.table > :not(caption) > * > * {
+  color: var(--text) !important;
+  background-color: transparent !important;
+}
+
+/* Make table headers readable */
+.table thead th {
+  color: var(--text) !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+
+/* =========================
+   FORMS
+========================= */
+
+.form-control,
+.form-select,
+.form-control-plaintext {
+  background: rgba(17, 31, 54, 0.75) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text) !important;
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: rgba(76, 201, 240, 0.35) !important;
+  box-shadow: 0 0 0 0.2rem rgba(76, 201, 240, 0.15) !important;
+}
+
+.form-control::placeholder {
+  color: rgba(167, 179, 194, 0.65);
+}
+
+/* =========================
+   BUTTONS
+========================= */
+
+.nb-btn-primary,
+.btn-primary {
+  background: rgba(76, 201, 240, 0.18) !important;
+  border: 1px solid rgba(76, 201, 240, 0.35) !important;
+  color: var(--text) !important;
+  font-weight: 600;
+}
+
+.nb-btn-primary:hover,
+.btn-primary:hover {
+  background: rgba(76, 201, 240, 0.26) !important;
+  border-color: rgba(76, 201, 240, 0.55) !important;
+}
+
+.btn-outline-secondary,
+.nb-btn-outline {
+  border-color: var(--border) !important;
+  color: var(--text2) !important;
+}
+
+.btn-outline-secondary:hover,
+.nb-btn-outline:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: var(--text) !important;
+}
+
+/* Make outline-primary match your theme (used on dashboard "View all workouts") */
+.btn-outline-primary {
+  border-color: rgba(76, 201, 240, 0.35) !important;
+  color: rgba(76, 201, 240, 0.95) !important;
+}
+
+.btn-outline-primary:hover {
+  background: rgba(76, 201, 240, 0.14) !important;
+  border-color: rgba(76, 201, 240, 0.55) !important;
+  color: var(--text) !important;
+}
+
+/* =========================
+   ALERTS
+========================= */
+
+.nb-alert {
+  border: 1px solid var(--border);
+  background: rgba(15, 26, 46, 0.75);
+  color: var(--text);
+}
+
+/* =========================
+   DASHBOARD UTILITIES (Step 3)
+========================= */
+
+/* Replaces inline streak badge styling */
+.nb-badge {
+  background: rgba(76, 201, 240, 0.18);
+  border: 1px solid rgba(76, 201, 240, 0.35);
+  color: var(--text);
+}
+
+/* Replaces inline list-group item styling in Latest Workouts */
+.nb-list-item {
+  background: rgba(17, 31, 54, 0.55) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text) !important;
+}
+
+.nb-list-item:hover,
+.nb-list-item:focus {
+  background: rgba(17, 31, 54, 0.70) !important;
+  color: var(--text) !important;
+}
+
+/* =========================
+   CONSISTENCY PACK (Meals / Workouts / Account)
+========================= */
+
+/* Page header + action bar pattern */
+.nb-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.nb-page-title {
+  margin: 0;
+}
+
+.nb-page-subtitle {
+  margin: 0.15rem 0 0 0;
+  color: var(--text2) !important;
+}
+
+/* Uniform “panel” card wrapper */
+.nb-card {
+  background: rgba(15, 26, 46, 0.75) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text) !important;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.25);
+  border-radius: 14px;
+}
+
+.nb-card .card-header {
+  background: rgba(17, 31, 54, 0.35) !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+
+.nb-card-soft {
+  background: rgba(17, 31, 54, 0.55) !important;
+}
+
+/* Table styling for dark theme */
+.nb-table {
+  --bs-table-color: var(--text);
+  --bs-table-bg: transparent;
+  --bs-table-border-color: var(--border);
+}
+
+.nb-table thead th {
+  color: var(--text) !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+
+.nb-table tbody td {
+  border-top: 1px solid var(--border) !important;
+  color: var(--text) !important;
+}
+
+/* Table row hover */
+.nb-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+
+/* Make table action buttons consistent size */
+.nb-table .btn {
+  padding: 0.35rem 0.6rem;
+  font-size: 0.85rem;
+}
+
+/* Empty state block */
+.nb-empty {
+  border: 1px dashed rgba(255,255,255,0.14);
+  background: rgba(17, 31, 54, 0.35);
+  border-radius: 14px;
+  padding: 1rem;
+  color: var(--text2);
+}
+
+.nb-empty strong {
+  color: var(--text);
+}
+
+/* Pills/badges (reusable) */
+.nb-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.04);
+  color: var(--text2);
+  font-size: 0.85rem;
+}
+
+.nb-pill-primary {
+  border-color: rgba(76, 201, 240, 0.35);
+  background: rgba(76, 201, 240, 0.12);
+  color: var(--text);
+}
+
+/* List group base (fits your theme) */
+.list-group {
+  background: transparent;
+}
+.list-group-item {
+  border-color: var(--border) !important;
+}
+
+/* Forms: spacing + error styling */
+.nb-form-row {
+  margin-bottom: 0.85rem;
+}
+
+.nb-error {
+  color: #ffb4b4;
+  font-size: 0.9rem;
+  margin-top: 0.25rem;
+}
+
+/* Pagination */
+.pagination .page-link {
+  background: rgba(17, 31, 54, 0.55) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text2) !important;
+}
+.pagination .page-link:hover {
+  background: rgba(255,255,255,0.06) !important;
+  color: var(--text) !important;
+}
+.pagination .page-item.active .page-link {
+  background: rgba(76, 201, 240, 0.14) !important;
+  border-color: rgba(76, 201, 240, 0.45) !important;
+  color: var(--text) !important;
+}
+
+/* =========================
+   BODYWEIGHT PAGE FIXES
+   - Remove striping
+   - Force weight values white
+   - Make Edit button clearer
+========================= */
+
+/* Turn OFF the table-striped alternating backgrounds */
+.table.table-striped > tbody > tr:nth-of-type(odd) > * {
+  background-color: transparent !important;
+}
+.table.table-striped > tbody > tr:nth-of-type(even) > * {
+  background-color: transparent !important;
+}
+
+/* Slight hover (optional, keeps it clean) */
+.table > tbody > tr:hover > * {
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+
+/* Force Bodyweight table text white (Date + Weight + Actions) */
+.table > :not(caption) > * > * {
+  color: var(--text) !important;
+}
+
+/* Make the Edit button readable on dark background */
+.table .btn-outline-secondary {
+  border-color: rgba(255, 255, 255, 0.22) !important;
+  color: rgba(230, 237, 243, 0.95) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+.table .btn-outline-secondary:hover {
+  background: rgba(255, 255, 255, 0.14) !important;
+  border-color: rgba(255, 255, 255, 0.38) !important;
+  color: var(--text) !important;
+}

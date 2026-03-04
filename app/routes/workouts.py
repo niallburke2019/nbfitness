@@ -1,6 +1,7 @@
-from datetime import datetime
+from __future__ import annotations
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from datetime import datetime
+from flask import Blueprint, render_template, request, redirect, url_for, flash, abort
 from flask_login import login_required, current_user
 
 from app import db
@@ -10,249 +11,304 @@ workouts_bp = Blueprint("workouts", __name__)
 
 
 # -----------------------
-# LIST WORKOUTS
+# helpers
+# -----------------------
+def _get_workout_or_404(workout_id: int) -> Workout:
+    w = Workout.query.get_or_404(workout_id)
+    if w.user_id != current_user.id:
+        abort(403)
+    return w
+
+
+def _parse_exercise_lines(text: str) -> list[dict]:
+    """
+    Format (one per line):
+      Exercise Name | weight | reps | sets
+    Example:
+      Bench Press | 80 | 8 | 3
+      Incline DB Press | 30 | 10 | 3
+      Lat Pulldown | 55 | 12 | 3
+
+    - weight/reps/sets optional (blank allowed)
+    - sets defaults to 1 if weight+reps present
+    """
+    items: list[dict] = []
+    if not text:
+        return items
+
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+
+        parts = [p.strip() for p in line.split("|")]
+        name = parts[0] if len(parts) >= 1 else ""
+        if not name:
+            continue
+
+        weight = None
+        reps = None
+        sets_count = 0
+
+        if len(parts) >= 2 and parts[1]:
+            try:
+                weight = float(parts[1])
+            except ValueError:
+                weight = None
+
+        if len(parts) >= 3 and parts[2]:
+            try:
+                reps = int(parts[2])
+            except ValueError:
+                reps = None
+
+        if len(parts) >= 4 and parts[3]:
+            try:
+                sets_count = int(parts[3])
+            except ValueError:
+                sets_count = 0
+
+        # If user provided weight+reps but no sets, assume 1 set
+        if sets_count <= 0 and (weight is not None or reps is not None):
+            sets_count = 1
+
+        items.append(
+            {
+                "name": name,
+                "weight": weight,
+                "reps": reps,
+                "sets_count": sets_count,
+            }
+        )
+
+    return items
+
+
+def _apply_exercises_to_workout(workout: Workout, exercise_lines: str) -> None:
+    """
+    Replace workout.exercises with parsed lines.
+    """
+    workout.exercises.clear()
+
+    parsed = _parse_exercise_lines(exercise_lines)
+
+    for ex_index, item in enumerate(parsed):
+        ex = WorkoutExercise(name=item["name"], position=ex_index)
+        workout.exercises.append(ex)
+
+        weight = item["weight"]
+        reps = item["reps"]
+        sets_count = item["sets_count"]
+
+        for set_index in range(sets_count):
+            s = WorkoutSet(weight=weight, reps=reps, position=set_index)
+            ex.sets.append(s)
+
+
+# -----------------------
+# LIST WORKOUTS (search/filter/sort + pagination)
 # -----------------------
 @workouts_bp.get("/workouts")
 @login_required
 def list_workouts():
-    workouts = (
-        db.session.query(Workout)
-        .filter(Workout.user_id == current_user.id)
-        .order_by(Workout.workout_date.desc(), Workout.created_at.desc())
-        .all()
+    q = (request.args.get("q") or "").strip()
+    start_raw = (request.args.get("start") or "").strip()
+    end_raw = (request.args.get("end") or "").strip()
+    sort = (request.args.get("sort") or "date_desc").strip()
+    page_raw = (request.args.get("page") or "1").strip()
+
+    # page safe parse
+    try:
+        page = int(page_raw)
+        if page < 1:
+            page = 1
+    except ValueError:
+        page = 1
+
+    query = Workout.query.filter(Workout.user_id == current_user.id)
+
+    # title search (case-insensitive)
+    if q:
+        query = query.filter(Workout.title.ilike(f"%{q}%"))
+
+    # date filters
+    if start_raw:
+        try:
+            start_date = datetime.strptime(start_raw, "%Y-%m-%d").date()
+            query = query.filter(Workout.workout_date >= start_date)
+        except ValueError:
+            pass
+
+    if end_raw:
+        try:
+            end_date = datetime.strptime(end_raw, "%Y-%m-%d").date()
+            query = query.filter(Workout.workout_date <= end_date)
+        except ValueError:
+            pass
+
+    # sorting (matches your template)
+    if sort == "date_asc":
+        query = query.order_by(Workout.workout_date.asc(), Workout.created_at.asc())
+    elif sort == "duration_desc":
+        query = query.order_by(Workout.duration_minutes.desc(), Workout.workout_date.desc())
+    elif sort == "duration_asc":
+        query = query.order_by(Workout.duration_minutes.asc(), Workout.workout_date.desc())
+    else:
+        sort = "date_desc"
+        query = query.order_by(Workout.workout_date.desc(), Workout.created_at.desc())
+
+    pagination = query.paginate(page=page, per_page=10, error_out=False)
+
+    return render_template(
+        "workouts/list.html",
+        workouts=pagination.items,
+        pagination=pagination,
+        q=q,
+        start=start_raw,
+        end=end_raw,
+        sort=sort,
     )
-    return render_template("workouts/list.html", workouts=workouts)
 
 
 # -----------------------
 # CREATE WORKOUT
 # -----------------------
-@workouts_bp.route("/workouts/new", methods=["GET", "POST"])
+@workouts_bp.get("/workouts/new")
 @login_required
-def create_workout():
-    if request.method == "POST":
-        title = (request.form.get("title") or "").strip()
-        workout_date_raw = (request.form.get("workout_date") or "").strip()
-        notes = (request.form.get("notes") or "").strip()
-
-        if not title:
-            flash("Workout title is required.", "danger")
-            return redirect(url_for("workouts.create_workout"))
-
-        try:
-            workout_date = datetime.strptime(workout_date_raw, "%Y-%m-%d").date()
-        except ValueError:
-            flash("Please enter a valid workout date.", "danger")
-            return redirect(url_for("workouts.create_workout"))
-
-        workout = Workout(
-            user_id=current_user.id,
-            title=title,
-            workout_date=workout_date,
-            notes=notes if notes else None,
-        )
-        db.session.add(workout)
-        db.session.commit()
-
-        flash("Workout created.", "success")
-        return redirect(url_for("workouts.view_workout", workout_id=workout.id))
-
-    return render_template("workouts/new.html")
+def create_workout_get():
+    return render_template("workouts/create.html")
 
 
-# -----------------------
-# VIEW WORKOUT
-# -----------------------
-@workouts_bp.get("/workouts/<int:workout_id>")
+@workouts_bp.post("/workouts/new")
 @login_required
-def view_workout(workout_id):
-    workout = db.session.get(Workout, workout_id)
-    if not workout or workout.user_id != current_user.id:
-        flash("Workout not found.", "warning")
-        return redirect(url_for("workouts.list_workouts"))
-
-    return render_template("workouts/view_workout.html", workout=workout)
-
-
-# -----------------------
-# ADD EXERCISE
-# -----------------------
-@workouts_bp.post("/workouts/<int:workout_id>/exercise/add")
-@login_required
-def add_exercise(workout_id):
-    workout = db.session.get(Workout, workout_id)
-    if not workout or workout.user_id != current_user.id:
-        flash("Workout not found.", "warning")
-        return redirect(url_for("workouts.list_workouts"))
-
-    name = (request.form.get("name") or "").strip()
-    muscle_group = (request.form.get("muscle_group") or "").strip()
+def create_workout_post():
+    title = (request.form.get("title") or "").strip()
+    workout_date_raw = (request.form.get("workout_date") or "").strip()
+    duration_raw = (request.form.get("duration_minutes") or "").strip()
     notes = (request.form.get("notes") or "").strip()
+    exercise_lines = (request.form.get("exercise_lines") or "").strip()
 
-    if not name:
-        flash("Exercise name is required.", "danger")
-        return redirect(url_for("workouts.view_workout", workout_id=workout_id))
+    if not title or not workout_date_raw:
+        flash("Title and date are required.", "danger")
+        return redirect(url_for("workouts.create_workout_get"))
 
-    exercise = WorkoutExercise(
-        workout_id=workout_id,
-        name=name,
-        muscle_group=muscle_group if muscle_group else None,
-        notes=notes if notes else None,
-    )
-    db.session.add(exercise)
-    db.session.commit()
-
-    flash("Exercise added.", "success")
-    return redirect(url_for("workouts.view_workout", workout_id=workout_id))
-
-
-# -----------------------
-# ADD SET (SAFE NUMBERING)
-# -----------------------
-@workouts_bp.post("/workouts/exercise/<int:exercise_id>/set/add")
-@login_required
-def add_set(exercise_id):
-    exercise = db.session.get(WorkoutExercise, exercise_id)
-    if not exercise:
-        flash("Exercise not found.", "warning")
-        return redirect(url_for("workouts.list_workouts"))
-
-    workout = exercise.workout
-    if workout.user_id != current_user.id:
-        flash("You do not have permission to edit this workout.", "danger")
-        return redirect(url_for("workouts.view_workout", workout_id=workout.id))
-
-    reps_raw = (request.form.get("reps") or "").strip()
-    weight_raw = (request.form.get("weight_kg") or "").strip()
-    rir_raw = (request.form.get("rir") or "").strip()
-
-    # Validate reps
     try:
-        reps = int(reps_raw)
-        if reps <= 0:
-            raise ValueError
+        workout_date = datetime.strptime(workout_date_raw, "%Y-%m-%d").date()
     except ValueError:
-        flash("Reps must be a positive whole number.", "danger")
-        return redirect(url_for("workouts.view_workout", workout_id=workout.id))
+        flash("Invalid date format.", "danger")
+        return redirect(url_for("workouts.create_workout_get"))
 
-    # Validate weight (optional)
-    weight_kg = None
-    if weight_raw:
-        try:
-            weight_kg = float(weight_raw)
-            if weight_kg < 0:
-                raise ValueError
-        except ValueError:
-            flash("Weight must be a valid number (0 or greater).", "danger")
-            return redirect(url_for("workouts.view_workout", workout_id=workout.id))
+    try:
+        duration = int(duration_raw) if duration_raw else 0
+        if duration < 0:
+            duration = 0
+    except ValueError:
+        duration = 0
 
-    # Validate rir (optional)
-    rir = None
-    if rir_raw:
-        try:
-            rir = int(rir_raw)
-            if rir < 0 or rir > 10:
-                raise ValueError
-        except ValueError:
-            flash("RIR must be a whole number between 0 and 10.", "danger")
-            return redirect(url_for("workouts.view_workout", workout_id=workout.id))
-
-    # Safe next set number
-    current_max = max([s.set_number for s in exercise.sets], default=0)
-    next_set_number = current_max + 1
-
-    workout_set = WorkoutSet(
-        exercise_id=exercise_id,
-        set_number=next_set_number,
-        reps=reps,
-        weight_kg=weight_kg,
-        rir=rir,
+    workout = Workout(
+        title=title,
+        workout_date=workout_date,
+        duration_minutes=duration,
+        notes=notes or None,
+        user_id=current_user.id,
     )
-    db.session.add(workout_set)
+
+    _apply_exercises_to_workout(workout, exercise_lines)
+
+    db.session.add(workout)
     db.session.commit()
 
-    flash("Set added.", "success")
+    flash("Workout created successfully.", "success")
     return redirect(url_for("workouts.view_workout", workout_id=workout.id))
 
 
 # -----------------------
-# DELETE SET + RENUMBER
+# VIEW WORKOUT (DETAIL)
 # -----------------------
-@workouts_bp.post("/workouts/set/<int:set_id>/delete")
+@workouts_bp.get("/workouts/<int:workout_id>")
 @login_required
-def delete_set(set_id):
-    workout_set = db.session.get(WorkoutSet, set_id)
-    if not workout_set:
-        flash("Set not found.", "warning")
-        return redirect(url_for("workouts.list_workouts"))
+def view_workout(workout_id: int):
+    workout = _get_workout_or_404(workout_id)
+    return render_template("workouts/detail.html", workout=workout)
 
-    exercise = workout_set.exercise
-    workout = exercise.workout
 
-    if workout.user_id != current_user.id:
-        flash("You do not have permission to delete this set.", "danger")
-        return redirect(url_for("workouts.view_workout", workout_id=workout.id))
+# -----------------------
+# EDIT WORKOUT
+# -----------------------
+@workouts_bp.get("/workouts/<int:workout_id>/edit")
+@login_required
+def edit_workout_get(workout_id: int):
+    workout = _get_workout_or_404(workout_id)
 
-    workout_id = workout.id
-    exercise_id = exercise.id
+    # Pre-fill exercise_lines from existing data
+    lines = []
+    for ex in workout.exercises:
+        if ex.sets:
+            w0 = ex.sets[0].weight
+            r0 = ex.sets[0].reps
+            identical = all((s.weight == w0 and s.reps == r0) for s in ex.sets)
+            if identical:
+                lines.append(
+                    f"{ex.name} | {w0 if w0 is not None else ''} | {r0 if r0 is not None else ''} | {len(ex.sets)}"
+                )
+            else:
+                lines.append(f"{ex.name}")
+        else:
+            lines.append(f"{ex.name}")
 
-    db.session.delete(workout_set)
-    db.session.flush()
+    exercise_lines = "\n".join(lines)
 
-    remaining_sets = (
-        db.session.query(WorkoutSet)
-        .filter(WorkoutSet.exercise_id == exercise_id)
-        .order_by(WorkoutSet.set_number.asc(), WorkoutSet.id.asc())
-        .all()
-    )
+    return render_template("workouts/edit.html", workout=workout, exercise_lines=exercise_lines)
 
-    for i, s in enumerate(remaining_sets, start=1):
-        s.set_number = i
+
+@workouts_bp.post("/workouts/<int:workout_id>/edit")
+@login_required
+def edit_workout_post(workout_id: int):
+    workout = _get_workout_or_404(workout_id)
+
+    title = (request.form.get("title") or "").strip()
+    workout_date_raw = (request.form.get("workout_date") or "").strip()
+    duration_raw = (request.form.get("duration_minutes") or "").strip()
+    notes = (request.form.get("notes") or "").strip()
+    exercise_lines = (request.form.get("exercise_lines") or "").strip()
+
+    if not title or not workout_date_raw:
+        flash("Title and date are required.", "danger")
+        return redirect(url_for("workouts.edit_workout_get", workout_id=workout_id))
+
+    try:
+        workout.workout_date = datetime.strptime(workout_date_raw, "%Y-%m-%d").date()
+    except ValueError:
+        flash("Invalid date format.", "danger")
+        return redirect(url_for("workouts.edit_workout_get", workout_id=workout_id))
+
+    try:
+        duration = int(duration_raw) if duration_raw else 0
+        if duration < 0:
+            duration = 0
+    except ValueError:
+        duration = 0
+
+    workout.title = title
+    workout.duration_minutes = duration
+    workout.notes = notes or None
+
+    _apply_exercises_to_workout(workout, exercise_lines)
 
     db.session.commit()
 
-    flash("Set deleted.", "success")
-    return redirect(url_for("workouts.view_workout", workout_id=workout_id))
+    flash("Workout updated successfully.", "success")
+    return redirect(url_for("workouts.view_workout", workout_id=workout.id))
 
 
 # -----------------------
-# DELETE EXERCISE (POST ONLY) ✅ NOW SIMPLE (cascade handles sets)
-# -----------------------
-@workouts_bp.post("/workouts/exercise/<int:exercise_id>/delete")
-@login_required
-def delete_exercise(exercise_id):
-    exercise = db.session.get(WorkoutExercise, exercise_id)
-    if not exercise:
-        flash("Exercise not found.", "warning")
-        return redirect(url_for("workouts.list_workouts"))
-
-    workout = exercise.workout
-    if workout.user_id != current_user.id:
-        flash("You do not have permission to delete this exercise.", "danger")
-        return redirect(url_for("workouts.view_workout", workout_id=workout.id))
-
-    workout_id = workout.id
-
-    db.session.delete(exercise)  # ✅ cascade deletes sets
-    db.session.commit()
-
-    flash("Exercise deleted.", "success")
-    return redirect(url_for("workouts.view_workout", workout_id=workout_id))
-
-
-# -----------------------
-# DELETE WORKOUT (POST ONLY) ✅ NOW SIMPLE (cascade handles exercises + sets)
+# DELETE WORKOUT
 # -----------------------
 @workouts_bp.post("/workouts/<int:workout_id>/delete")
 @login_required
-def delete_workout(workout_id):
-    workout = db.session.get(Workout, workout_id)
-    if not workout or workout.user_id != current_user.id:
-        flash("Workout not found.", "warning")
-        return redirect(url_for("workouts.list_workouts"))
-
-    db.session.delete(workout)  # ✅ cascade deletes exercises + sets
+def delete_workout_post(workout_id: int):
+    workout = _get_workout_or_404(workout_id)
+    db.session.delete(workout)
     db.session.commit()
-
-    flash("Workout deleted.", "success")
+    flash("Workout deleted.", "warning")
     return redirect(url_for("workouts.list_workouts"))

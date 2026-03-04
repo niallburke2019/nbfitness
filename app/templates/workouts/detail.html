@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}{{ workout.title }} - NB Fitness{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <h1 class="mb-1">{{ workout.title }}</h1>
+    <div class="text-muted">
+      {{ workout.workout_date.strftime("%d %b %Y") }} • {{ workout.safe_duration() }} mins
+    </div>
+  </div>
+
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-primary" href="{{ url_for('workouts.edit_workout_get', workout_id=workout.id) }}">Edit</a>
+
+    <!-- Delete button triggers modal -->
+    <button class="btn btn-outline-danger" type="button" data-bs-toggle="modal" data-bs-target="#deleteModal">
+      Delete
+    </button>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="card p-3 shadow-sm h-100">
+      <div class="text-muted">Total Sets</div>
+      <div class="display-6">{{ workout.total_sets() }}</div>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="card p-3 shadow-sm h-100">
+      <div class="text-muted">Total Reps</div>
+      <div class="display-6">{{ workout.total_reps() }}</div>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="card p-3 shadow-sm h-100">
+      <div class="text-muted">Total Volume</div>
+      <div class="display-6">{{ "%.0f"|format(workout.total_volume()) }}</div>
+      <div class="text-muted small">weight × reps (all sets)</div>
+    </div>
+  </div>
+</div>
+
+<div class="card p-4 shadow-sm mb-4">
+  <h3 class="mb-3">Exercises</h3>
+
+  {% if workout.exercises %}
+    <div class="accordion" id="exerciseAccordion">
+      {% for ex in workout.exercises %}
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="heading{{ ex.id }}">
+            <button class="accordion-button {% if not loop.first %}collapsed{% endif %}" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#collapse{{ ex.id }}"
+                    aria-expanded="{{ 'true' if loop.first else 'false' }}" aria-controls="collapse{{ ex.id }}">
+              <div class="w-100 d-flex justify-content-between align-items-center">
+                <strong>{{ ex.name }}</strong>
+                <span class="text-muted small ms-3">
+                  {{ ex.total_sets() }} sets • {{ ex.total_reps() }} reps • {{ "%.0f"|format(ex.total_volume()) }} vol
+                </span>
+              </div>
+            </button>
+          </h2>
+
+          <div id="collapse{{ ex.id }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}"
+               aria-labelledby="heading{{ ex.id }}" data-bs-parent="#exerciseAccordion">
+            <div class="accordion-body">
+              {% if ex.sets %}
+                <div class="table-responsive">
+                  <table class="table table-sm align-middle mb-0">
+                    <thead>
+                      <tr>
+                        <th style="width:80px;">Set</th>
+                        <th style="width:120px;">Weight</th>
+                        <th style="width:120px;">Reps</th>
+                        <th>Volume</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for s in ex.sets %}
+                        <tr>
+                          <td>{{ loop.index }}</td>
+                          <td>{{ s.weight if s.weight is not none else "-" }}</td>
+                          <td>{{ s.reps if s.reps is not none else "-" }}</td>
+                          <td>
+                            {% if s.weight is not none and s.reps is not none %}
+                              {{ "%.0f"|format(s.weight * s.reps) }}
+                            {% else %}
+                              -
+                            {% endif %}
+                          </td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              {% else %}
+                <p class="text-muted mb-0">No sets recorded.</p>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="text-muted mb-0">No exercises recorded.</p>
+  {% endif %}
+</div>
+
+{% if workout.notes %}
+  <div class="card p-4 shadow-sm">
+    <h3 class="mb-2">Notes</h3>
+    <p class="mb-0">{{ workout.notes }}</p>
+  </div>
+{% endif %}
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="deleteModalLabel">Delete workout?</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        This will permanently delete <strong>{{ workout.title }}</strong> and all exercises/sets.
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <form method="post" action="{{ url_for('workouts.delete_workout_post', workout_id=workout.id) }}">
+          <button type="submit" class="btn btn-danger">Delete</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

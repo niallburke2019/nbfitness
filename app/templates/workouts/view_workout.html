@@ -6,20 +6,22 @@
   <div class="d-flex justify-content-between align-items-start mb-3">
     <div>
       <h1 class="display-5 mb-1">{{ workout.title }}</h1>
-
-      <div class="text-muted">
-        {{ workout.workout_date.strftime("%Y-%m-%d") }} · {{ workout.workout_date.strftime("%A") }}
-      </div>
-
+      <div class="text-muted">{{ workout.workout_date.strftime("%Y-%m-%d") }}</div>
+      <div class="text-muted">{{ workout.workout_date.strftime("%A") }}</div>
       {% if workout.notes %}
-        <div class="mt-2">
-          <span class="fw-semibold">Notes:</span>
-          <span>{{ workout.notes }}</span>
-        </div>
+        <div class="mt-2">{{ workout.notes }}</div>
       {% endif %}
     </div>
 
-    <div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary" href="{{ url_for('workouts.edit_workout', workout_id=workout.id) }}">Edit</a>
+
+      <form method="POST"
+            action="{{ url_for('workouts.delete_workout', workout_id=workout.id) }}"
+            onsubmit="return confirm('Delete this workout? This will remove all exercises and sets too.');">
+        <button class="btn btn-outline-danger" type="submit">Delete</button>
+      </form>
+
       <a class="btn btn-outline-primary" href="{{ url_for('workouts.list_workouts') }}">Back</a>
     </div>
   </div>
@@ -46,32 +48,15 @@
     {% for ex in workout.exercises %}
       <div class="card mb-3">
         <div class="card-body">
+          <h4 class="mb-1">{{ ex.name }}</h4>
 
-          <div class="d-flex justify-content-between align-items-start">
-            <div>
-              <h4 class="mb-1">{{ ex.name }}</h4>
+          {% if ex.muscle_group %}
+            <div class="text-muted">{{ ex.muscle_group }}</div>
+          {% endif %}
 
-              {% if ex.muscle_group %}
-                <div class="text-muted">{{ ex.muscle_group }}</div>
-              {% endif %}
-
-              {% if ex.notes %}
-                <div class="mt-2">
-                  <span class="fw-semibold">Notes:</span>
-                  <span>{{ ex.notes }}</span>
-                </div>
-              {% endif %}
-            </div>
-
-            <!-- ✅ Delete Exercise Button -->
-            <div>
-              <form method="POST"
-                    action="{{ url_for('workouts.delete_exercise', exercise_id=ex.id) }}"
-                    onsubmit="return confirm('Delete this exercise and all its sets?');">
-                <button class="btn btn-sm btn-outline-danger" type="submit">Delete exercise</button>
-              </form>
-            </div>
-          </div>
+          {% if ex.notes %}
+            <div class="mt-2">{{ ex.notes }}</div>
+          {% endif %}
 
           <h6 class="mt-4 mb-2">Sets</h6>
 

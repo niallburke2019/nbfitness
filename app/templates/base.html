@@ -1,88 +1,158 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>{% block title %}NB Fitness{% endblock %}</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}NB Fitness{% endblock %}</title>
 
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
-    rel="stylesheet"
-  >
+    <!-- Bootstrap (CDN) -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
 
-  {% block head %}{% endblock %}
-</head>
+    <!-- Your CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}" />
 
-<body class="bg-light">
+    {% block head_extra %}{% endblock %}
+  </head>
 
-  <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom">
-    <div class="container">
+  <body class="nb-body">
+    <!-- NAVBAR -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark nb-nav">
+      <div class="container">
+        <a class="navbar-brand fw-semibold d-flex align-items-center gap-2" href="{{ url_for('dash.home') }}">
+          <span class="nb-logo-badge">NB</span>
+          <span class="nb-logo-text">Fitness</span>
+        </a>
 
-      <a class="navbar-brand fw-bold" href="{{ url_for('dash.home') }}">
-        NB Fitness
-      </a>
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#navbarMain"
+          aria-controls="navbarMain"
+          aria-expanded="false"
+          aria-label="Toggle navigation"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
 
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-        <span class="navbar-toggler-icon"></span>
-      </button>
-
-      <div class="collapse navbar-collapse" id="navbarNav">
-        <ul class="navbar-nav ms-auto">
-
-          <li class="nav-item">
-            <a class="nav-link" href="{{ url_for('dash.home') }}">Home</a>
-          </li>
-
-          {% if current_user.is_authenticated %}
-
+        <div class="collapse navbar-collapse" id="navbarMain">
+          <ul class="navbar-nav me-auto mb-2 mb-lg-0">
             <li class="nav-item">
-              <a class="nav-link" href="{{ url_for('dash.dashboard') }}">Dashboard</a>
+              <a class="nav-link" href="{{ url_for('dash.home') }}">Dashboard</a>
             </li>
 
-            <li class="nav-item">
-              <a class="nav-link" href="{{ url_for('workouts.list_workouts') }}">Workouts</a>
+            <!-- Workouts dropdown (this is what you want) -->
+            <li class="nav-item dropdown">
+              <a
+                class="nav-link dropdown-toggle"
+                href="#"
+                id="workoutsDropdown"
+                role="button"
+                data-bs-toggle="dropdown"
+                aria-expanded="false"
+              >
+                Workouts
+              </a>
+              <ul class="dropdown-menu nb-dropdown" aria-labelledby="workoutsDropdown">
+                <li>
+                  <a class="dropdown-item" href="{{ url_for('workouts.list_workouts') }}">My Workouts</a>
+                </li>
+                <li>
+                  <a class="dropdown-item" href="{{ url_for('workouts.create_workout_get') }}">Add Workout</a>
+                </li>
+              </ul>
             </li>
 
-            <li class="nav-item">
-              <a class="nav-link text-danger" href="{{ url_for('auth.logout') }}">Logout</a>
+            <!-- Meals dropdown -->
+            <li class="nav-item dropdown">
+              <a
+                class="nav-link dropdown-toggle"
+                href="#"
+                id="mealsDropdown"
+                role="button"
+                data-bs-toggle="dropdown"
+                aria-expanded="false"
+              >
+                Meals
+              </a>
+              <ul class="dropdown-menu nb-dropdown" aria-labelledby="mealsDropdown">
+                <li>
+                  <a class="dropdown-item" href="{{ url_for('meals.day_view') }}">Today</a>
+                </li>
+                <li>
+                  <a class="dropdown-item" href="{{ url_for('meals.add_get') }}">Add Food</a>
+                </li>
+                <li>
+                  <a class="dropdown-item" href="{{ url_for('meals.history') }}">History</a>
+                </li>
+                <li>
+                  <a class="dropdown-item" href="{{ url_for('meals.goals_get') }}">Macro Goals</a>
+                </li>
+              </ul>
             </li>
 
-          {% else %}
-
+            <!-- Bodyweight -->
             <li class="nav-item">
-              <a class="nav-link" href="{{ url_for('auth.login') }}">Login</a>
+              <a class="nav-link" href="{{ url_for('weight.index') }}">Bodyweight</a>
             </li>
 
+            <!-- Account (your blueprint is /account/) -->
             <li class="nav-item">
-              <a class="nav-link" href="{{ url_for('auth.register') }}">Register</a>
+              <a class="nav-link" href="{{ url_for('account.index') }}">Account</a>
             </li>
+          </ul>
 
-          {% endif %}
-        </ul>
+          <ul class="navbar-nav ms-auto">
+            {% if current_user.is_authenticated %}
+              <li class="nav-item d-flex align-items-center">
+                <span class="nb-user me-2 small">{{ current_user.email }}</span>
+              </li>
+
+              <!-- logout should be POST to avoid 405 if your route is POST-only -->
+              <li class="nav-item">
+                <form method="post" action="{{ url_for('auth.logout') }}" class="d-inline">
+                  <button class="btn btn-link nav-link" type="submit" style="text-decoration:none;">
+                    Logout
+                  </button>
+                </form>
+              </li>
+            {% else %}
+              <li class="nav-item">
+                <a class="nav-link" href="{{ url_for('auth.login') }}">Login</a>
+              </li>
+            {% endif %}
+          </ul>
+        </div>
       </div>
-    </div>
-  </nav>
+    </nav>
 
-  <div class="container mt-3">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, message in messages %}
-          <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-            {{ message }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-          </div>
-        {% endfor %}
-      {% endif %}
-    {% endwith %}
-  </div>
+    <!-- FLASH MESSAGES -->
+    <main class="container py-4 nb-main">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div
+              class="alert alert-{{ category if category in ['primary','secondary','success','danger','warning','info','light','dark'] else 'info' }} alert-dismissible fade show"
+              role="alert"
+            >
+              {{ message }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
 
-  <main class="container my-4">
-    {% block content %}{% endblock %}
-  </main>
+      {% block content %}{% endblock %}
+    </main>
 
-  <script
-    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js">
-  </script>
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
-  {% block scripts %}{% endblock %}
-</body>
+    <!-- ✅ Support BOTH block names so nothing breaks -->
+    {% block scripts %}{% endblock %}
+    {% block body_extra %}{% endblock %}
+  </body>
 </html>

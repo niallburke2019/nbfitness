@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}Edit Workout - NB Fitness{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <h1 class="mb-1">Edit Workout</h1>
+    <p class="text-muted mb-0">Update workout details and exercises.</p>
+  </div>
+</div>
+
+<form id="workoutForm" method="post" action="{{ url_for('workouts.edit_workout_post', workout_id=workout.id) }}" class="card p-4 shadow-sm">
+  <div class="row g-3">
+    <div class="col-md-6">
+      <label class="form-label">Title</label>
+      <input name="title" type="text" class="form-control" value="{{ workout.title }}" required>
+    </div>
+
+    <div class="col-md-3">
+      <label class="form-label">Date</label>
+      <input name="workout_date"
+             type="date"
+             class="form-control"
+             value="{{ workout.workout_date.strftime('%Y-%m-%d') if workout.workout_date else '' }}"
+             required>
+    </div>
+
+    <div class="col-md-3">
+      <label class="form-label">Duration (mins)</label>
+      <input name="duration_minutes" type="number" class="form-control" min="0" value="{{ workout.duration_minutes or 0 }}">
+    </div>
+
+    <!-- Exercises table UI -->
+    <div class="col-12">
+      <div class="d-flex justify-content-between align-items-center">
+        <label class="form-label mb-0">Exercises</label>
+        <button class="btn btn-outline-primary btn-sm" type="button" id="addExerciseBtn">+ Add exercise</button>
+      </div>
+      <div class="form-text mb-2">Enter exercise name + weight/reps/sets. Sets creates that many identical sets.</div>
+
+      <div class="table-responsive">
+        <table class="table table-sm align-middle">
+          <thead>
+            <tr>
+              <th>Exercise</th>
+              <th style="width:140px;">Weight</th>
+              <th style="width:120px;">Reps</th>
+              <th style="width:120px;">Sets</th>
+              <th style="width:80px;"></th>
+            </tr>
+          </thead>
+          <tbody id="exerciseTableBody">
+            <!-- rows injected by JS -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Hidden textarea keeps your backend format exactly the same -->
+      <textarea name="exercise_lines" id="exercise_lines" class="d-none">{{ exercise_lines }}</textarea>
+
+      <div class="form-text">
+        Stored format: <strong>Exercise | weight | reps | sets</strong>
+      </div>
+    </div>
+
+    <div class="col-12">
+      <label class="form-label">Notes (optional)</label>
+      <textarea name="notes" rows="3" class="form-control">{{ workout.notes or "" }}</textarea>
+    </div>
+
+    <div class="col-12 d-flex gap-2">
+      <button class="btn btn-primary" type="submit">Save Changes</button>
+      <a class="btn btn-outline-secondary" href="{{ url_for('workouts.view_workout', workout_id=workout.id) }}">Cancel</a>
+    </div>
+  </div>
+</form>
+
+<script>
+(function () {
+  const tbody = document.getElementById("exerciseTableBody");
+  const addBtn = document.getElementById("addExerciseBtn");
+  const hidden = document.getElementById("exercise_lines");
+  const form = document.getElementById("workoutForm");
+
+  function makeRow({ name = "", weight = "", reps = "", sets = "" } = {}) {
+    const tr = document.createElement("tr");
+
+    tr.innerHTML = `
+      <td><input class="form-control form-control-sm" type="text" placeholder="e.g. Squat" value="${escapeHtml(name)}"></td>
+      <td><input class="form-control form-control-sm" type="number" step="0.5" min="0" placeholder="kg" value="${escapeAttr(weight)}"></td>
+      <td><input class="form-control form-control-sm" type="number" min="0" placeholder="reps" value="${escapeAttr(reps)}"></td>
+      <td><input class="form-control form-control-sm" type="number" min="0" placeholder="sets" value="${escapeAttr(sets)}"></td>
+      <td class="text-end">
+        <button type="button" class="btn btn-outline-danger btn-sm">Remove</button>
+      </td>
+    `;
+
+    tr.querySelector("button").addEventListener("click", () => {
+      tr.remove();
+    });
+
+    tbody.appendChild(tr);
+  }
+
+  function parseLinesToRows(text) {
+    const lines = (text || "").split("\n").map(l => l.trim()).filter(Boolean);
+    if (lines.length === 0) {
+      makeRow();
+      return;
+    }
+
+    for (const line of lines) {
+      const parts = line.split("|").map(p => p.trim());
+      const name = parts[0] || "";
+      const weight = parts.length >= 2 ? (parts[1] || "") : "";
+      const reps = parts.length >= 3 ? (parts[2] || "") : "";
+      const sets = parts.length >= 4 ? (parts[3] || "") : "";
+      makeRow({ name, weight, reps, sets });
+    }
+  }
+
+  function rowsToLines() {
+    const lines = [];
+    const rows = tbody.querySelectorAll("tr");
+    rows.forEach(row => {
+      const inputs = row.querySelectorAll("input");
+      const name = (inputs[0].value || "").trim();
+      const weight = (inputs[1].value || "").trim();
+      const reps = (inputs[2].value || "").trim();
+      const sets = (inputs[3].value || "").trim();
+
+      if (!name) return;
+
+      // Only include fields that exist, but keep separators consistent
+      // Backend parser can handle blanks.
+      lines.push(`${name} | ${weight} | ${reps} | ${sets}`);
+    });
+    return lines.join("\n");
+  }
+
+  function escapeHtml(str) {
+    return String(str || "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+  function escapeAttr(str) {
+    // same idea but safe for attribute values
+    return escapeHtml(str);
+  }
+
+  addBtn.addEventListener("click", () => makeRow());
+  form.addEventListener("submit", () => {
+    hidden.value = rowsToLines();
+  });
+
+  // Initial load: populate rows from the existing server-provided exercise_lines
+  parseLinesToRows(hidden.value);
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Edit Food - NB Fitness{% endblock %}
+
+{% block content %}
+<div class="nb-page-header">
+  <div>
+    <h1 class="display-6 nb-page-title mb-1">Edit Food</h1>
+    <p class="nb-page-subtitle">Update macros for this entry.</p>
+  </div>
+</div>
+
+<form method="post" class="card nb-card p-4 shadow-sm" style="max-width: 800px;">
+  <div class="row g-3">
+    <div class="col-md-4">
+      <label class="form-label">Date</label>
+      <input class="form-control" type="date" value="{{ entry.entry_date.strftime('%Y-%m-%d') }}" disabled>
+      <div class="form-text">Date is fixed for this entry.</div>
+    </div>
+
+    <div class="col-md-4">
+      <label class="form-label">Meal</label>
+      <select class="form-select" name="meal_type">
+        {% for t in meal_types %}
+          <option value="{{ t }}" {% if t == entry.meal_type %}selected{% endif %}>{{ t|capitalize }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="col-md-12">
+      <label class="form-label">Food name</label>
+      <input class="form-control" name="food_name" value="{{ entry.food_name }}" required>
+    </div>
+
+    <div class="col-md-3">
+      <label class="form-label">Calories</label>
+      <input class="form-control" type="number" min="0" name="calories" value="{{ entry.calories }}">
+    </div>
+
+    <div class="col-md-3">
+      <label class="form-label">Protein (g)</label>
+      <input class="form-control" type="number" step="0.1" min="0" name="protein_g" value="{{ entry.protein_g }}">
+    </div>
+
+    <div class="col-md-3">
+      <label class="form-label">Carbs (g)</label>
+      <input class="form-control" type="number" step="0.1" min="0" name="carbs_g" value="{{ entry.carbs_g }}">
+    </div>
+
+    <div class="col-md-3">
+      <label class="form-label">Fat (g)</label>
+      <input class="form-control" type="number" step="0.1" min="0" name="fat_g" value="{{ entry.fat_g }}">
+    </div>
+
+    <div class="col-12 d-flex gap-2">
+      <button class="btn btn-primary" type="submit">Save</button>
+      <a class="btn btn-outline-secondary" href="{{ url_for('meals.day_view', date=entry.entry_date.strftime('%Y-%m-%d')) }}">
+        Cancel
+      </a>
+    </div>
+  </div>
+</form>
+{% endblock %}

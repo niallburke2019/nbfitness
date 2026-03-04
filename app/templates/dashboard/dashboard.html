@@ -1,14 +1,483 @@
 {% extends "base.html" %}
-{% block content %}
-  <h1>Dashboard</h1>
-  <p>Hi {% if user.name %}{{ user.name }}{% else %}there{% endif %}.</p>
 
-  <div class="card">
-    <h2>Sprint 2 next</h2>
-    <ul>
-      <li>Workout logging</li>
-      <li>Meal logging</li>
-      <li>Validation + testing tables</li>
-    </ul>
+{% block title %}Dashboard - NB Fitness{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-start justify-content-between mb-4 flex-wrap gap-3">
+  <div>
+    <h1 class="display-6 mb-1">Dashboard</h1>
+    {% if start_of_week and today %}
+      <p class="text-muted mb-0">
+        Week: {{ start_of_week.strftime("%d %b") }} – {{ today.strftime("%d %b %Y") }}
+        {% if streak and streak > 0 %}
+          · <span class="badge nb-badge">
+            {{ streak }}-day streak
+          </span>
+        {% endif %}
+      </p>
+    {% endif %}
   </div>
+
+  <div class="d-flex gap-2 flex-wrap justify-content-start justify-content-md-end w-100 w-md-auto">
+    <a class="btn btn-primary px-4" href="{{ url_for('workouts.create_workout_get') }}">+ New Workout</a>
+    <a class="btn btn-outline-secondary px-4" href="{{ url_for('meals.day_view') }}">Meals Today</a>
+    <a class="btn btn-outline-secondary px-4" href="{{ url_for('weight.index') }}">Bodyweight</a>
+  </div>
+</div>
+
+<!-- ✅ Summary cards -->
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="card p-3 shadow-sm h-100">
+      <div class="text-muted">Workouts This Week</div>
+      <div class="display-6">{{ workouts_this_week }}</div>
+      <div class="text-muted small">Total workouts: {{ total_workouts }}</div>
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="card p-3 shadow-sm h-100">
+      <div class="text-muted">Minutes This Week</div>
+      <div class="display-6">
+        {{ minutes_this_week }}<span class="fs-6 text-muted"> mins</span>
+      </div>
+      <div class="text-muted small">All-time: {{ total_minutes_all_time }} mins</div>
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="card p-3 shadow-sm h-100">
+      <div class="text-muted">Avg Calories (7 days)</div>
+      <div class="display-6">{{ "{:,}".format(avg_calories_7d) }}</div>
+      <div class="text-muted small">Based on meals logged</div>
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="card p-3 shadow-sm h-100">
+      <div class="text-muted">Latest Weight</div>
+      {% if latest_weight_kg is not none %}
+        <div class="display-6">{{ "%.1f"|format(latest_weight_kg) }}<span class="fs-6 text-muted"> kg</span></div>
+        <div class="text-muted small">
+          {% if latest_weight_date %}{{ latest_weight_date.strftime("%d %b %Y") }}{% endif %}
+        </div>
+      {% else %}
+        <div class="display-6">—</div>
+        <div class="text-muted small">No entries yet</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h3 class="h5 mb-0">Weekly Goal</h3>
+          <span class="text-muted small">{{ minutes_this_week }} / {{ weekly_goal }} mins</span>
+        </div>
+
+        <div class="progress" role="progressbar" aria-label="Weekly goal progress"
+             aria-valuenow="{{ goal_percent }}" aria-valuemin="0" aria-valuemax="100">
+          <div class="progress-bar" style="width: {{ goal_percent }}%;">{{ goal_percent }}%</div>
+        </div>
+
+        <p class="text-muted small mt-2 mb-0">
+          Based on WEEKLY_MINUTES_GOAL (default 150).
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <h3 class="h5 mb-3">Latest Workouts</h3>
+
+        {% if latest_workouts %}
+          <div class="list-group" style="background: transparent;">
+            {% for w in latest_workouts %}
+              <a class="list-group-item list-group-item-action nb-list-item"
+                 href="{{ url_for('workouts.view_workout', workout_id=w.id) }}">
+                <div class="d-flex w-100 justify-content-between">
+                  <strong>{{ w.title }}</strong>
+                  <small class="text-muted">{{ w.workout_date.strftime("%d %b %Y") }}</small>
+                </div>
+                {% if w.duration_minutes %}
+                  <small class="text-muted">{{ w.duration_minutes }} mins</small>
+                {% endif %}
+              </a>
+            {% endfor %}
+          </div>
+          <div class="mt-3">
+            <a class="btn btn-outline-primary btn-sm" href="{{ url_for('workouts.list_workouts') }}">
+              View all workouts
+            </a>
+          </div>
+        {% else %}
+          <p class="text-muted mb-0">No workouts logged yet.</p>
+          <div class="mt-3">
+            <a class="btn btn-primary btn-sm" href="{{ url_for('workouts.create_workout_get') }}">
+              Create your first workout
+            </a>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ✅ Calories + Weight charts -->
+<div class="row g-3 mt-4">
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div>
+            <h3 class="h5 mb-1">Calories (7 days)</h3>
+            <p class="text-muted small mb-0">Daily totals from meal entries.</p>
+          </div>
+          <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('meals.day_view') }}">Meals</a>
+        </div>
+
+        {% if cal_values_7d and (cal_values_7d|sum) > 0 %}
+          <div style="height: 260px;">
+            <canvas id="caloriesChart"></canvas>
+          </div>
+        {% else %}
+          <p class="text-muted mb-0">No meals logged in the last 7 days.</p>
+          <a class="btn btn-primary btn-sm mt-3" href="{{ url_for('meals.day_view') }}">
+            Log your first meal
+          </a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div>
+            <h3 class="h5 mb-1">Bodyweight (30 days)</h3>
+            <p class="text-muted small mb-0">Gaps are allowed if you missed days.</p>
+          </div>
+          <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('weight.index') }}">Bodyweight</a>
+        </div>
+
+        {% set weight_points = weight_values_30d|select('ne', none)|list %}
+        {% if weight_points and (weight_points|length) > 0 %}
+          <div style="height: 260px;">
+            <canvas id="weightChartMini"></canvas>
+          </div>
+        {% else %}
+          <p class="text-muted mb-0">No bodyweight entries in the last 30 days.</p>
+          <a class="btn btn-primary btn-sm mt-3" href="{{ url_for('weight.index') }}">
+            Add your first weigh-in
+          </a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Activity Chart with toggle -->
+<div class="card shadow-sm mt-4">
+  <div class="card-body">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <div>
+        <h3 class="h5 mb-1">Activity</h3>
+        <p class="text-muted small mb-0">Workouts and minutes over time.</p>
+      </div>
+
+      <div class="btn-group" role="group" aria-label="Chart range">
+        <a class="btn btn-sm {% if chart_range == '4w' %}btn-primary{% else %}btn-outline-primary{% endif %}"
+           href="{{ url_for('dash.dashboard', range='4w', exercise=selected_exercise) }}">
+          4 Weeks
+        </a>
+        <a class="btn btn-sm {% if chart_range == '6m' %}btn-primary{% else %}btn-outline-primary{% endif %}"
+           href="{{ url_for('dash.dashboard', range='6m', exercise=selected_exercise) }}">
+          6 Months
+        </a>
+      </div>
+    </div>
+
+    {% if chart_counts and (chart_counts|sum) > 0 %}
+      <div style="height: 300px;">
+        <canvas id="activityChart"></canvas>
+      </div>
+    {% else %}
+      <p class="text-muted mb-0">No workout activity yet.</p>
+      <a class="btn btn-primary btn-sm mt-3" href="{{ url_for('workouts.create_workout_get') }}">
+        Log your first workout
+      </a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Exercise Progression -->
+<div class="card shadow-sm mt-4">
+  <div class="card-body">
+    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-2">
+      <div>
+        <h3 class="h5 mb-1">Exercise Progression</h3>
+        <p class="text-muted small mb-0">Max weight per day for the selected exercise.</p>
+      </div>
+
+      <form method="get" action="{{ url_for('dash.dashboard') }}" class="d-flex align-items-center gap-2">
+        <input type="hidden" name="range" value="{{ chart_range }}">
+        <label class="small text-muted mb-0" for="exerciseSelect">Exercise</label>
+        <select id="exerciseSelect" name="exercise" class="form-select form-select-sm" onchange="this.form.submit()">
+          {% for name in exercise_names %}
+            <option value="{{ name }}" {% if name == selected_exercise %}selected{% endif %}>{{ name }}</option>
+          {% endfor %}
+        </select>
+      </form>
+    </div>
+
+    {% if prog_labels and (prog_labels|length) > 0 %}
+      <div style="height: 280px;">
+        <canvas id="progressChart"></canvas>
+      </div>
+    {% else %}
+      <p class="text-muted mb-0">No progression data yet. Log sets with weight to see your trend.</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Personal Records -->
+<div class="card shadow-sm mt-4">
+  <div class="card-body">
+    <h3 class="h5 mb-3">Personal Records</h3>
+
+    {% if personal_records and personal_records|length > 0 %}
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Exercise</th>
+              <th style="width: 140px;">PR (kg)</th>
+              <th style="width: 160px;">Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for pr in personal_records %}
+              <tr>
+                <td>{{ pr.name }}</td>
+                <td><strong>{{ "%.1f"|format(pr.weight) }}</strong></td>
+                <td class="text-muted">
+                  {% if pr.date %}
+                    {{ pr.date.strftime("%d %b %Y") }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="text-muted small mt-2 mb-0">
+        PRs show the heaviest weight ever logged per exercise.
+      </p>
+    {% else %}
+      <p class="text-muted mb-0">
+        No personal records yet. Add weights to your sets to start tracking PRs.
+      </p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <script>
+    (function () {
+      // Global dark-theme defaults (consistent charts)
+      Chart.defaults.color = "rgba(255,255,255,0.72)";
+      Chart.defaults.borderColor = "rgba(255,255,255,0.10)";
+
+      const commonScales = {
+        x: {
+          ticks: { color: "rgba(255,255,255,0.55)" },
+          grid: { color: "rgba(255,255,255,0.06)" }
+        },
+        y: {
+          ticks: { color: "rgba(255,255,255,0.55)" },
+          grid: { color: "rgba(255,255,255,0.06)" }
+        }
+      };
+
+      // Calories (7 days)
+      const calEl = document.getElementById("caloriesChart");
+      if (calEl) {
+        const labels = {{ cal_labels_7d|tojson }};
+        const vals = {{ cal_values_7d|tojson }};
+
+        new Chart(calEl, {
+          type: "line",
+          data: {
+            labels: labels,
+            datasets: [{
+              label: "Calories",
+              data: vals,
+              tension: 0.3,
+              pointRadius: 3,
+              borderWidth: 2,
+              fill: true,
+              borderColor: "rgba(76, 201, 240, 0.9)",
+              backgroundColor: "rgba(76, 201, 240, 0.12)"
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: "index", intersect: false },
+            plugins: { legend: { display: false } },
+            scales: {
+              ...commonScales,
+              y: { ...commonScales.y, beginAtZero: true }
+            }
+          }
+        });
+      }
+
+      // Weight (30 days)
+      const wEl = document.getElementById("weightChartMini");
+      if (wEl) {
+        const labels = {{ weight_labels_30d|tojson }};
+        const vals = {{ weight_values_30d|tojson }};
+
+        new Chart(wEl, {
+          type: "line",
+          data: {
+            labels: labels,
+            datasets: [{
+              label: "Weight (kg)",
+              data: vals,
+              spanGaps: true,
+              tension: 0.25,
+              pointRadius: 0,
+              borderWidth: 2,
+              borderColor: "rgba(245, 158, 11, 0.9)",
+              backgroundColor: "rgba(245, 158, 11, 0.10)",
+              fill: true
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: "index", intersect: false },
+            plugins: { legend: { display: false } },
+            scales: {
+              ...commonScales,
+              y: { ...commonScales.y, beginAtZero: false }
+            }
+          }
+        });
+      }
+
+      // Activity chart
+      const activityEl = document.getElementById("activityChart");
+      if (activityEl) {
+        const labels = {{ chart_labels|tojson }};
+        const counts = {{ chart_counts|tojson }};
+        const minutes = {{ chart_minutes|tojson }};
+
+        if (labels && labels.length) {
+          new Chart(activityEl, {
+            type: "bar",
+            data: {
+              labels: labels,
+              datasets: [
+                {
+                  label: "Workouts",
+                  data: counts,
+                  yAxisID: "yWorkouts",
+                  backgroundColor: "rgba(76, 201, 240, 0.35)",
+                  borderColor: "rgba(76, 201, 240, 0.75)",
+                  borderWidth: 1
+                },
+                {
+                  label: "Minutes",
+                  data: minutes,
+                  yAxisID: "yMinutes",
+                  backgroundColor: "rgba(245, 158, 11, 0.25)",
+                  borderColor: "rgba(245, 158, 11, 0.75)",
+                  borderWidth: 1
+                }
+              ]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              interaction: { mode: "index", intersect: false },
+              scales: {
+                yWorkouts: {
+                  beginAtZero: true,
+                  title: { display: true, text: "Workouts" },
+                  ticks: { color: "rgba(255,255,255,0.55)" },
+                  grid: { color: "rgba(255,255,255,0.06)" }
+                },
+                yMinutes: {
+                  beginAtZero: true,
+                  position: "right",
+                  grid: { drawOnChartArea: false },
+                  title: { display: true, text: "Minutes" },
+                  ticks: { color: "rgba(255,255,255,0.55)" }
+                },
+                x: commonScales.x
+              },
+              plugins: {
+                legend: {
+                  labels: { color: "rgba(255,255,255,0.72)" }
+                }
+              }
+            }
+          });
+        }
+      }
+
+      // Progression chart
+      const progEl = document.getElementById("progressChart");
+      if (progEl) {
+        const labels = {{ prog_labels|tojson }};
+        const weights = {{ prog_weights|tojson }};
+
+        if (labels && labels.length) {
+          new Chart(progEl, {
+            type: "line",
+            data: {
+              labels: labels,
+              datasets: [
+                {
+                  label: "Max Weight (kg)",
+                  data: weights,
+                  tension: 0.25,
+                  pointRadius: 3,
+                  borderWidth: 2,
+                  borderColor: "rgba(76, 201, 240, 0.9)",
+                  backgroundColor: "rgba(76, 201, 240, 0.08)",
+                  fill: false
+                }
+              ]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              interaction: { mode: "index", intersect: false },
+              plugins: { legend: { display: true } },
+              scales: {
+                ...commonScales,
+                y: { ...commonScales.y, beginAtZero: true, title: { display: true, text: "kg" } }
+              }
+            }
+          });
+        }
+      }
+    })();
+  </script>
 {% endblock %}

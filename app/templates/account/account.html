@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Account - NB Fitness{% endblock %}
+
+{% block content %}
+<div class="nb-page-header">
+  <div>
+    <h1 class="display-6 nb-page-title mb-1">Account</h1>
+    <p class="nb-page-subtitle">Manage your password and account settings.</p>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card nb-card p-3">
+      <h2 class="h5 mb-3">Change password</h2>
+
+      <form method="post" action="{{ url_for('account.change_password_post') }}">
+        <div class="mb-3">
+          <label class="form-label">Current password</label>
+          <input class="form-control" type="password" name="current_password" required>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">New password</label>
+          <input class="form-control" type="password" name="new_password" minlength="8" required>
+          <div class="form-text">Minimum 8 characters.</div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Confirm new password</label>
+          <input class="form-control" type="password" name="confirm_password" minlength="8" required>
+        </div>
+
+        <button class="btn btn-primary" type="submit">Update password</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card nb-card p-3">
+      <h2 class="h5 mb-2 text-danger">Delete account</h2>
+      <p class="text-muted small mb-3">
+        This permanently deletes your account and all associated data (workouts, meals, bodyweight, etc).
+      </p>
+
+      <form method="post" action="{{ url_for('account.delete_account_post') }}"
+            onsubmit="return confirm('Are you sure? This cannot be undone.');">
+
+        <div class="mb-3">
+          <label class="form-label">Type your email to confirm</label>
+          <input class="form-control" name="confirm_email" placeholder="{{ current_user.email }}" required>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Enter your current password</label>
+          <input class="form-control" type="password" name="password" required>
+        </div>
+
+        <button class="btn btn-outline-danger" type="submit">Delete my account</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

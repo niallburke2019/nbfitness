@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}Bodyweight - NB Fitness{% endblock %}
+
+{% block content %}
+<div class="nb-page-header">
+  <div>
+    <h1 class="display-6 nb-page-title mb-1">Bodyweight</h1>
+    <p class="nb-page-subtitle">Track your weight trends (last 30 days).</p>
+  </div>
+
+  <div class="d-flex align-items-center gap-2 flex-wrap">
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('weight.export_csv') }}">Export CSV</a>
+    <a class="btn btn-primary btn-sm" href="{{ url_for('weight.create_get') }}">Log Weight</a>
+  </div>
+</div>
+
+{% if latest %}
+  <div class="alert nb-alert mb-3">
+    Latest: <strong>{{ "%.1f"|format(latest.weight_kg) }} kg</strong>
+    ({{ latest.entry_date.strftime("%d %b %Y") }})
+  </div>
+{% else %}
+  <div class="alert alert-secondary mb-3">No weight entries yet. Log your first one.</div>
+{% endif %}
+
+<div class="card nb-card mb-4">
+  <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+    <span>Last 30 days</span>
+    <span class="text-muted small">{{ start.strftime("%d %b") }} → {{ end.strftime("%d %b") }}</span>
+  </div>
+  <div class="card-body">
+    <div style="height: 320px;">
+      <canvas id="weightChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<div class="card nb-card">
+  <div class="card-header fw-semibold">Entries</div>
+  <div class="card-body p-0">
+    {% if entries %}
+      <div class="table-responsive">
+        <table class="table table-striped align-middle mb-0 nb-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th class="text-end">Weight (kg)</th>
+              <th class="text-end" style="width: 220px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for e in entries %}
+              <tr>
+                <td>{{ e.entry_date.strftime("%d %b %Y") }}</td>
+                <td class="text-end">{{ "%.1f"|format(e.weight_kg) }}</td>
+                <td class="text-end">
+                  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('weight.edit_get', entry_id=e.id) }}">Edit</a>
+                  <form method="post" action="{{ url_for('weight.delete_post', entry_id=e.id) }}" class="d-inline">
+                    <button class="btn btn-sm btn-outline-danger" type="submit"
+                            onclick="return confirm('Delete this entry?')">
+                      Delete
+                    </button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="p-3 text-muted">No entries yet.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block body_extra %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+<script>
+  const labels = {{ labels|tojson }};
+  const rawWeights = {{ weights|tojson }};
+
+  // Convert to numbers / nulls
+  const weights = rawWeights.map(v => (v === null || v === undefined) ? null : Number(v));
+
+  // Fill gaps with last known weight so we get a continuous line
+  let last = null;
+  const filled = weights.map(v => {
+    if (v === null) return last;
+    last = v;
+    return v;
+  });
+
+  // If still null at the start (no earlier weight), keep null until first real weight
+  const firstIdx = filled.findIndex(v => v !== null);
+  for (let i = 0; i < firstIdx; i++) filled[i] = null;
+
+  // y range
+  const nums = filled.filter(v => typeof v === "number" && !Number.isNaN(v));
+  const minW = nums.length ? Math.min(...nums) : 0;
+  const maxW = nums.length ? Math.max(...nums) : 0;
+  const pad = nums.length ? Math.max(1, (maxW - minW) * 0.15) : 1;
+
+  const canvas = document.getElementById("weightChart");
+  if (canvas) {
+    if (canvas.__chart) canvas.__chart.destroy();
+
+    canvas.__chart = new Chart(canvas, {
+      type: "line",
+      data: {
+        labels,
+        datasets: [{
+          label: "Weight (kg)",
+          data: filled,
+          spanGaps: true,
+          borderWidth: 2,
+          tension: 0.25,
+          pointRadius: 3,
+          pointHoverRadius: 6,
+          fill: false
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { displayColors: false }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { maxTicksLimit: 8 } },
+          y: {
+            grid: { color: "rgba(255,255,255,0.06)" },
+            suggestedMin: nums.length ? (minW - pad) : undefined,
+            suggestedMax: nums.length ? (maxW + pad) : undefined
+          }
+        }
+      }
+    });
+  }
+</script>
+{% endblock %}

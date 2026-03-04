@@ -1,25 +1,70 @@
-from datetime import datetime, date
-from flask_login import UserMixin
+from __future__ import annotations
+
+from datetime import datetime, timezone
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from app import db
 
 
-class User(db.Model, UserMixin):
+def utcnow():
+    """Timezone-aware UTC timestamp (Python 3.13+ safe)."""
+    return datetime.now(timezone.utc)
+
+
+class User(db.Model):
     __tablename__ = "users"
 
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
-    # ✅ Cascade: deleting a user deletes their workouts (and everything under them)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
     workouts = db.relationship(
         "Workout",
         back_populates="user",
         cascade="all, delete-orphan",
-        passive_deletes=True,
+        lazy="dynamic",
     )
+
+    meal_entries = db.relationship(
+        "MealEntry",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="dynamic",
+    )
+
+    # ✅ NEW: one-to-one macro goal
+    macro_goal = db.relationship(
+        "MacroGoal",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+    # ✅ NEW: bodyweight logs
+    weight_entries = db.relationship(
+        "WeightEntry",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="dynamic",
+    )
+
+    # flask-login
+    @property
+    def is_authenticated(self):
+        return True
+
+    @property
+    def is_active(self):
+        return True
+
+    @property
+    def is_anonymous(self):
+        return False
+
+    def get_id(self):
+        return str(self.id)
 
     def set_password(self, password: str) -> None:
         self.password_hash = generate_password_hash(password)
@@ -33,25 +78,42 @@ class Workout(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
 
-    # If you want DB-level cascade too, keep ondelete="CASCADE"
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-
     title = db.Column(db.String(120), nullable=False)
-    workout_date = db.Column(db.Date, nullable=False, default=date.today)
+    workout_date = db.Column(db.Date, nullable=False, index=True)
+    duration_minutes = db.Column(db.Integer, nullable=False, default=0)
+
     notes = db.Column(db.Text, nullable=True)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=utcnow,
+        onupdate=utcnow,
+    )
 
     user = db.relationship("User", back_populates="workouts")
 
-    # ✅ Cascade: deleting a workout deletes exercises (and their sets via Exercise cascade)
     exercises = db.relationship(
         "WorkoutExercise",
         back_populates="workout",
         cascade="all, delete-orphan",
-        passive_deletes=True,
-        order_by="WorkoutExercise.id.asc()",
+        order_by="WorkoutExercise.position.asc()",
     )
+
+    def total_sets(self) -> int:
+        return sum(ex.total_sets() for ex in self.exercises)
+
+    def total_reps(self) -> int:
+        return sum(ex.total_reps() for ex in self.exercises)
+
+    def total_volume(self) -> float:
+        return sum(ex.total_volume() for ex in self.exercises)
+
+    def safe_duration(self) -> int:
+        return int(self.duration_minutes or 0)
 
 
 class WorkoutExercise(db.Model):
@@ -66,22 +128,31 @@ class WorkoutExercise(db.Model):
         index=True,
     )
 
-    name = db.Column(db.String(120), nullable=False)
-    muscle_group = db.Column(db.String(120), nullable=True)
-    notes = db.Column(db.Text, nullable=True)
-
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    name = db.Column(db.String(120), nullable=False, index=True)
+    position = db.Column(db.Integer, nullable=False, default=0)
 
     workout = db.relationship("Workout", back_populates="exercises")
 
-    # ✅ Cascade: deleting an exercise deletes its sets
     sets = db.relationship(
         "WorkoutSet",
         back_populates="exercise",
         cascade="all, delete-orphan",
-        passive_deletes=True,
-        order_by="WorkoutSet.set_number.asc(), WorkoutSet.id.asc()",
+        order_by="WorkoutSet.position.asc()",
     )
+
+    def total_sets(self) -> int:
+        return len(self.sets)
+
+    def total_reps(self) -> int:
+        return sum(int(s.reps or 0) for s in self.sets)
+
+    def total_volume(self) -> float:
+        total = 0.0
+        for s in self.sets:
+            w = float(s.weight or 0)
+            r = int(s.reps or 0)
+            total += (w * r)
+        return total
 
 
 class WorkoutSet(db.Model):
@@ -96,11 +167,82 @@ class WorkoutSet(db.Model):
         index=True,
     )
 
-    set_number = db.Column(db.Integer, nullable=False)
-    reps = db.Column(db.Integer, nullable=False)
-    weight_kg = db.Column(db.Float, nullable=True)
-    rir = db.Column(db.Integer, nullable=True)
+    weight = db.Column(db.Float, nullable=True)
+    reps = db.Column(db.Integer, nullable=True)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    position = db.Column(db.Integer, nullable=False, default=0)
 
     exercise = db.relationship("WorkoutExercise", back_populates="sets")
+
+
+class MealEntry(db.Model):
+    __tablename__ = "meal_entries"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+
+    entry_date = db.Column(db.Date, nullable=False, index=True)
+
+    meal_type = db.Column(db.String(20), nullable=False, default="lunch", index=True)
+
+    food_name = db.Column(db.String(255), nullable=False)
+
+    calories = db.Column(db.Integer, nullable=False, default=0)
+    protein_g = db.Column(db.Float, nullable=False, default=0.0)
+    carbs_g = db.Column(db.Float, nullable=False, default=0.0)
+    fat_g = db.Column(db.Float, nullable=False, default=0.0)
+
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+    user = db.relationship("User", back_populates="meal_entries")
+
+
+# ✅ NEW: Macro goals per user (one row per user)
+class MacroGoal(db.Model):
+    __tablename__ = "macro_goals"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+
+    calories_target = db.Column(db.Integer, nullable=False, default=0)
+    protein_target_g = db.Column(db.Float, nullable=False, default=0.0)
+    carbs_target_g = db.Column(db.Float, nullable=False, default=0.0)
+    fat_target_g = db.Column(db.Float, nullable=False, default=0.0)
+
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        nullable=False,
+        default=utcnow,
+        onupdate=utcnow,
+    )
+
+    user = db.relationship("User", back_populates="macro_goal")
+
+
+# ✅ NEW: Bodyweight tracking
+class WeightEntry(db.Model):
+    __tablename__ = "weight_entries"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+
+    entry_date = db.Column(db.Date, nullable=False, index=True)
+
+    weight_kg = db.Column(db.Float, nullable=False)
+
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+    user = db.relationship("User", back_populates="weight_entries")
+
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "entry_date", name="uq_weight_user_date"),
+    )
